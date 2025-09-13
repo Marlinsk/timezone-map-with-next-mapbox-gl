@@ -4,6 +4,7 @@ import React from "react";
 
 import MapProvider from "@/lib/mapbox/provider";
 import MapCotrols from "@/components/map/map-controls";
+// import TimezonesLayer from "@/components/timezones-layer";
 // import CitiesLayer from "@/components/cities-layer";
 
 export default function Home() {
@@ -24,8 +25,9 @@ export default function Home() {
           zoom: 10,
         }}
       >
+        {/* <TimezonesLayer /> */}
         {/* <CitiesLayer /> */}
-        <MapCotrols />
+        {/* <MapCotrols /> */}
       </MapProvider>
     </div>
   );
