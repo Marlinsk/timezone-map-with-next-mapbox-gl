@@ -62,15 +62,9 @@ function buildUtcBands(
 function buildUtcBandLabelPoints(
   bounds: [[number, number], [number, number]],
   marginLat = 2
-): FeatureCollection<
-  Point,
-  { label: string; offset: number; anchor: "top" | "bottom"; color: string }
-> {
+): FeatureCollection<Point, { label: string; offset: number; anchor: "top" | "bottom"; color: string }> {
   const [[minLon, minLat], [maxLon, maxLat]] = bounds;
-  const features: FeatureCollection<
-    Point,
-    { label: string; offset: number; anchor: "top" | "bottom"; color: string }
-  >["features"] = [];
+  const features: FeatureCollection<Point, { label: string; offset: number; anchor: "top" | "bottom"; color: string }>["features"] = [];
 
   for (let off = -12; off <= 14; off++) {
     const west = Math.max(minLon, off * 15);
@@ -78,31 +72,16 @@ function buildUtcBandLabelPoints(
     const midLon = (west + east) / 2;
     const label = off === 0 ? "UTC±0" : `UTC${off > 0 ? `+${off}` : off}`;
 
-    features.push(
-      {
-        type: "Feature",
-        properties: {
-          label,
-          offset: off,
-          anchor: "top",
-          color: colorForOffset(off),
-        },
-        geometry: { type: "Point", coordinates: [midLon, maxLat - marginLat] },
-      },
-      {
-        type: "Feature",
-        properties: {
-          label,
-          offset: off,
-          anchor: "bottom",
-          color: colorForOffset(off),
-        },
-        geometry: { type: "Point", coordinates: [midLon, minLat + marginLat] },
-      }
-    );
+    // ✅ agora só adiciona o ponto do BOTTOM
+    features.push({
+      type: "Feature",
+      properties: { label, offset: off, anchor: "bottom", color: colorForOffset(off) },
+      geometry: { type: "Point", coordinates: [midLon, minLat + marginLat] },
+    });
   }
   return { type: "FeatureCollection", features };
 }
+
 
 export default function MapProvider({
   mapContainerRef,
@@ -161,8 +140,8 @@ export default function MapProvider({
               source: "utc-bands",
               paint: {
                 "fill-color": ["get", "color"],
-                "fill-opacity": 0.06,
-                "fill-opacity-transition": { duration: 200 },
+                "fill-opacity": 0.03,
+                "fill-opacity-transition": { duration: 200 }
               },
               maxzoom: 6,
             },
@@ -175,6 +154,23 @@ export default function MapProvider({
           m.addSource("utc-bands-labels", { type: "geojson", data: labels });
         }
 
+        if (!m.getLayer("utc-bands-highlight")) {
+          m.addLayer(
+            {
+              id: "utc-bands-highlight",
+              type: "fill",
+              source: "utc-bands",
+              filter: ["==", ["get", "offset"], 9999], // começa desligado
+              paint: {
+                "fill-color": ["get", "color"],
+                "fill-opacity": 0.06,                  // 👈 fraca no hover
+                "fill-opacity-transition": { duration: 200 }
+              },
+            },
+            "land-structure-line"                      // fica no fundo
+          );
+        }
+
         if (!m.getLayer("utc-bands-label")) {
           m.addLayer(
             {
@@ -185,32 +181,10 @@ export default function MapProvider({
                 "symbol-placement": "point",
                 "text-field": ["get", "label"],
                 "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
-                "text-size": [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  1.5,
-                  10,
-                  4,
-                  12,
-                  6,
-                  14,
-                ],
+                "text-size": ["interpolate", ["linear"], ["zoom"], 1.5, 10, 4, 12, 6, 14],
                 "text-allow-overlap": false,
-                "text-anchor": [
-                  "match",
-                  ["get", "anchor"],
-                  "top",
-                  "top",
-                  "bottom",
-                ],
-                "text-offset": [
-                  "match",
-                  ["get", "anchor"],
-                  "top",
-                  ["literal", [0, -0.5]],
-                  ["literal", [0, 0.5]],
-                ],
+                "text-anchor": "bottom",
+                "text-offset": [0, 0.5],
               },
               paint: {
                 "text-color": "#111",
@@ -273,7 +247,7 @@ export default function MapProvider({
               source: "timezones",
               paint: {
                 "fill-color": ["get", "color"],
-                "fill-opacity": 0.24,
+                "fill-opacity": 0.12, 
                 "fill-antialias": true,
                 // 🔹 suaviza transições de hover
                 "fill-opacity-transition": { duration: 300 },
@@ -307,14 +281,14 @@ export default function MapProvider({
               id: "tz-fill-highlight",
               type: "fill",
               source: "timezones",
-              filter: ["==", ["get", "utcHour"], 9999],
+              filter: ["==", ["get", "utcHour"], 9999], // começa desligado
               paint: {
                 "fill-color": ["get", "color"],
-                "fill-opacity": 0.55,
-                "fill-opacity-transition": { duration: 300 },
+                "fill-opacity": 0.75,                  // 👈 forte
+                "fill-opacity-transition": { duration: 200 }
               },
             },
-            "tz-line"
+            "tz-fill"
           );
         }
 
@@ -335,51 +309,27 @@ export default function MapProvider({
           );
         }
 
-        // ===== 4) Focus mode no hover das faixas (tipagem v3) =====
-        function tzFillOpacityExpr(activeOffset: number | null): any {
-          // sem hover → opacidade padrão em LAND; oceano sempre baixo
-          if (activeOffset === null) {
-            return [
-              "case",
-              ["==", ["get", "isOcean"], true],
-              0.06, // oceano: sempre fraco
-              0.24, // terra: base
-            ];
-          }
-
-          // com hover → só TERRA da UTC ativa fica forte; resto fraco
-          return [
-            "case",
-            [
-              "all",
-              ["==", ["get", "utcHour"], activeOffset],
-              ["==", ["get", "isOcean"], false], // só land
-            ],
-            0.55, // terra da UTC ativa
-            0.06, // tudo o resto (inclui ocean)
-          ];
-        }
-
         let currentHoverOffset: number | null = null;
 
         const applyFocus = (off: number | null) => {
-          const noSel = ["==", ["get", "utcHour"], 9999] as any;
-          const onlyLandThisUTC = [
-            "all",
-            ["==", ["get", "utcHour"], off],
-            ["==", ["get", "isOcean"], false],
-          ] as any;
+          // Países/estados — liga o destaque só para a UTC focada
+          const countryFilter =
+            off === null
+              ? (["==", ["get", "utcHour"], 9999] as any)  // nada selecionado
+              : (["==", ["get", "utcHour"], off] as any);
 
-          m.setFilter(
-            "tz-fill-highlight",
-            off === null ? noSel : onlyLandThisUTC
-          );
-          m.setFilter(
-            "tz-line-highlight",
-            off === null ? noSel : onlyLandThisUTC
-          );
+          m.setFilter("tz-fill-highlight", countryFilter);
+          if (m.getLayer("tz-line-highlight")) {
+            m.setFilter("tz-line-highlight", countryFilter);
+          }
 
-          m.setPaintProperty("tz-fill", "fill-opacity", tzFillOpacityExpr(off));
+          // Faixa UTC no hover — fraca, só para marcar a banda correspondente
+          const bandFilter =
+            off === null
+              ? (["==", ["get", "offset"], 9999] as any)
+              : (["==", ["get", "offset"], off] as any);
+
+          m.setFilter("utc-bands-highlight", bandFilter);
         };
 
         // 🔹 handler usando o tipo correto do v3
