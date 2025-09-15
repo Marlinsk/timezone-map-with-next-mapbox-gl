@@ -53,7 +53,7 @@ This project uses **Mapbox GL JS** and requires a valid **Access Token** to load
 4. Go back to projet and create a **.env.local** file in the root (or edit the existing one) and add:
 
 ```bash
-NEXT_PUBLIC_MAPBOX_TOKEN=pk.seu_token_aqui
+NEXT_PUBLIC_MAPBOX_TOKEN=pk.your_token_here
 ```
 
 > Note: Variables that will be used in the browser must start with `NEXT_PUBLIC_`.
