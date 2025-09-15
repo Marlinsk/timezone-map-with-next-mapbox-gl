@@ -1,4 +1,4 @@
-# Timezones Map
+# Timezones with Mapbox GL
 
 This project renders an **interactive map of time zones (UTC)** using [Mapbox GL JS](https://docs.mapbox.com/mapbox-gl-js) and **GeoJSON** data.
 
