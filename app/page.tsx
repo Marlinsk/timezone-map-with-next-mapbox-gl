@@ -3,9 +3,6 @@
 import React from "react";
 
 import MapProvider from "@/lib/mapbox/provider";
-import MapCotrols from "@/components/map/map-controls";
-// import TimezonesLayer from "@/components/timezones-layer";
-// import CitiesLayer from "@/components/cities-layer";
 
 export default function Home() {
   const mapContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -19,16 +16,14 @@ export default function Home() {
       />
       <MapProvider
         mapContainerRef={mapContainerRef}
-        initialViewState={{
-          longitude: -122.4194,
-          latitude: 37.7749,
-          zoom: 10,
-        }}
-      >
-        {/* <TimezonesLayer /> */}
-        {/* <CitiesLayer /> */}
-        {/* <MapCotrols /> */}
-      </MapProvider>
+        initialViewState={
+          {
+            longitude: -122.4194,
+            latitude: 37.7749,
+            zoom: 10,
+          }
+        }
+      />
     </div>
   );
 }

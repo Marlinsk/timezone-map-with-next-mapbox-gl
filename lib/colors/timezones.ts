@@ -1,19 +1,19 @@
 const TZ_PALETTE = [
-  "#3B82F6", // azul
-  "#22D3EE", // ciano
-  "#A855F7", // roxo
-  "#EC4899", // rosa
-  "#10B981", // verde-água
-  "#F59E0B", // amarelo
-  "#6366F1", // indigo
-  "#F97316", // laranja
+  "#3B82F6",
+  "#22D3EE",
+  "#A855F7",
+  "#EC4899",
+  "#10B981",
+  "#F59E0B",
+  "#6366F1",
+  "#F97316",
 ];
 
 function djb2(str: string): number {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash) + str.charCodeAt(i); // hash * 33 + c
-    hash = hash | 0; // força 32-bit
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash = hash | 0;
   }
   return Math.abs(hash);
 }

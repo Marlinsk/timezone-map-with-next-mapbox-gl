@@ -28,7 +28,6 @@ const UTC_BAND_COLORS = {
   "14": "#22d3ee",
 } as const;
 
-// offset -> cor (fallback para 0)
 export function colorForOffset(offset: number): string {
   const k = String(Math.max(-12, Math.min(14, Math.round(offset))));
   // @ts-ignore

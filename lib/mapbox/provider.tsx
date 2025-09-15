@@ -3,10 +3,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import type { FeatureCollection, Point, Polygon } from "geojson";
+
 import { MapContext } from "@/context/map-context";
 import { getUtcOffsetHours } from "../time/offset";
 import { colorForOffset } from "../colors/utc-bands";
-import type { FeatureCollection, Point, Polygon } from "geojson";
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
 
@@ -20,18 +21,9 @@ type MapComponentProps = {
   children?: React.ReactNode;
 };
 
-// 👉 Gera GeoJSON de faixas verticais com label “UTC±X” e cor pronta
-function buildUtcBands(
-  bounds: [[number, number], [number, number]]
-): FeatureCollection<
-  Polygon,
-  { offset: number; label: string; color: string }
-> {
+function buildUtcBands(bounds: [[number, number], [number, number]]): FeatureCollection<Polygon, { offset: number; label: string; color: string }> {
   const [[minLon, minLat], [maxLon, maxLat]] = bounds;
-  const features: FeatureCollection<
-    Polygon,
-    { offset: number; label: string; color: string }
-  >["features"] = [];
+  const features: FeatureCollection<Polygon, { offset: number; label: string; color: string }>["features"] = [];
 
   for (let off = -12; off <= 14; off++) {
     const west = Math.max(minLon, off * 15);
@@ -58,13 +50,12 @@ function buildUtcBands(
   return { type: "FeatureCollection", features };
 }
 
-// Labels top/bottom (mantidas como você tinha)
-function buildUtcBandLabelPoints(
-  bounds: [[number, number], [number, number]],
-  marginLat = 2
-): FeatureCollection<Point, { label: string; offset: number; anchor: "top" | "bottom"; color: string }> {
+function buildUtcBandLabelPoints(bounds: [[number, number], [number, number]], marginLat = 2): FeatureCollection<Point, { label: string; offset: number; anchor: "top" | "bottom"; color: string }> {
   const [[minLon, minLat], [maxLon, maxLat]] = bounds;
   const features: FeatureCollection<Point, { label: string; offset: number; anchor: "top" | "bottom"; color: string }>["features"] = [];
+
+  const TOP_MARGIN_DEG = 0.4;
+  const BOTTOM_MARGIN_DEG = 2;
 
   for (let off = -12; off <= 14; off++) {
     const west = Math.max(minLon, off * 15);
@@ -72,22 +63,24 @@ function buildUtcBandLabelPoints(
     const midLon = (west + east) / 2;
     const label = off === 0 ? "UTC±0" : `UTC${off > 0 ? `+${off}` : off}`;
 
-    // ✅ agora só adiciona o ponto do BOTTOM
+    features.push({
+      type: "Feature",
+      properties: { label, offset: off, anchor: "top", color: colorForOffset(off) },
+      geometry: { type: "Point", coordinates: [midLon, maxLat - TOP_MARGIN_DEG] },
+    });
+
     features.push({
       type: "Feature",
       properties: { label, offset: off, anchor: "bottom", color: colorForOffset(off) },
-      geometry: { type: "Point", coordinates: [midLon, minLat + marginLat] },
+      geometry: { type: "Point", coordinates: [midLon, minLat + BOTTOM_MARGIN_DEG] },
     });
   }
+
   return { type: "FeatureCollection", features };
 }
 
 
-export default function MapProvider({
-  mapContainerRef,
-  initialViewState,
-  children,
-}: MapComponentProps) {
+export default function MapProvider({ mapContainerRef, initialViewState, children }: MapComponentProps) {
   const map = useRef<mapboxgl.Map | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -111,6 +104,7 @@ export default function MapProvider({
       new mapboxgl.NavigationControl({ showCompass: false }),
       "top-left"
     );
+
     m.setMaxBounds([
       [-180, -60],
       [180, 85],
@@ -118,11 +112,10 @@ export default function MapProvider({
 
     map.current = m;
 
-    const DATA_URL = "/data/timezones.geojson"; // em /public/data
+    const DATA_URL = "/data/timezones.geojson";
 
     const onStyleLoad = async () => {
       try {
-        // ===== 1) Faixas UTC (underlay) =====
         const BOUNDS: [[number, number], [number, number]] = [
           [-180, -60],
           [180, 85],
@@ -160,14 +153,14 @@ export default function MapProvider({
               id: "utc-bands-highlight",
               type: "fill",
               source: "utc-bands",
-              filter: ["==", ["get", "offset"], 9999], // começa desligado
+              filter: ["==", ["get", "offset"], 9999],
               paint: {
                 "fill-color": ["get", "color"],
-                "fill-opacity": 0.06,                  // 👈 fraca no hover
+                "fill-opacity": 0.06,
                 "fill-opacity-transition": { duration: 200 }
               },
             },
-            "land-structure-line"                      // fica no fundo
+            "land-structure-line"
           );
         }
 
@@ -183,8 +176,18 @@ export default function MapProvider({
                 "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
                 "text-size": ["interpolate", ["linear"], ["zoom"], 1.5, 10, 4, 12, 6, 14],
                 "text-allow-overlap": false,
-                "text-anchor": "bottom",
-                "text-offset": [0, 0.5],
+                "text-anchor": [
+                  "match",
+                  ["get", "anchor"],
+                  "top", "top",
+                  "bottom"
+                ],
+                "text-offset": [
+                  "match",
+                  ["get", "anchor"],
+                  "top", ["literal", [0, -0.6]],
+                  ["literal", [0, 0.5]]
+                ],
               },
               paint: {
                 "text-color": "#111",
@@ -199,10 +202,10 @@ export default function MapProvider({
           );
         }
 
-        // ===== 2) Polígonos de timezone (overlay) =====
         const res = await fetch(DATA_URL);
-        if (!res.ok)
-          throw new Error(`Falha ao baixar ${DATA_URL} (HTTP ${res.status})`);
+        
+        if (!res.ok) throw new Error(`Falha ao baixar ${DATA_URL} (HTTP ${res.status})`);
+        
         const raw = await res.json();
         const now = new Date();
 
@@ -210,15 +213,10 @@ export default function MapProvider({
           ...raw,
           features: raw.features.map((f: any) => {
             const tzid = f.properties?.tzid ?? "";
-            const off = getUtcOffsetHours(tzid, now); // pode ser 5.5, 9.75...
+            const off = getUtcOffsetHours(tzid, now);
             const utcHour = Math.round(off);
 
-            // 🔹 heurística simples para oceano (funciona com evansiroky):
-            //   - Zonas do mar geralmente são "Etc/GMT±N"
-            //   - Mantemos só land como forte
-            const isOcean =
-              typeof tzid === "string" &&
-              (tzid.startsWith("Etc/") || tzid.includes("Ocean"));
+            const isOcean = typeof tzid === "string" && (tzid.startsWith("Etc/") || tzid.includes("Ocean"));
 
             const color = colorForOffset(utcHour);
 
@@ -228,7 +226,7 @@ export default function MapProvider({
                 ...f.properties,
                 utcOffset: off,
                 utcHour,
-                isOcean, // 👈 novo campo boolean
+                isOcean,
                 color,
               },
             };
@@ -249,7 +247,6 @@ export default function MapProvider({
                 "fill-color": ["get", "color"],
                 "fill-opacity": 0.12, 
                 "fill-antialias": true,
-                // 🔹 suaviza transições de hover
                 "fill-opacity-transition": { duration: 300 },
               },
             },
@@ -274,17 +271,16 @@ export default function MapProvider({
           );
         }
 
-        // ===== 3) Layers de highlight para foco na UTC sob o mouse =====
         if (!m.getLayer("tz-fill-highlight")) {
           m.addLayer(
             {
               id: "tz-fill-highlight",
               type: "fill",
               source: "timezones",
-              filter: ["==", ["get", "utcHour"], 9999], // começa desligado
+              filter: ["==", ["get", "utcHour"], 9999],
               paint: {
                 "fill-color": ["get", "color"],
-                "fill-opacity": 0.75,                  // 👈 forte
+                "fill-opacity": 0.75,
                 "fill-opacity-transition": { duration: 200 }
               },
             },
@@ -312,28 +308,20 @@ export default function MapProvider({
         let currentHoverOffset: number | null = null;
 
         const applyFocus = (off: number | null) => {
-          // Países/estados — liga o destaque só para a UTC focada
-          const countryFilter =
-            off === null
-              ? (["==", ["get", "utcHour"], 9999] as any)  // nada selecionado
-              : (["==", ["get", "utcHour"], off] as any);
+          const countryFilter = off === null ? (["==", ["get", "utcHour"], 9999] as any) : (["==", ["get", "utcHour"], off] as any);
 
           m.setFilter("tz-fill-highlight", countryFilter);
+          
           if (m.getLayer("tz-line-highlight")) {
             m.setFilter("tz-line-highlight", countryFilter);
           }
 
-          // Faixa UTC no hover — fraca, só para marcar a banda correspondente
-          const bandFilter =
-            off === null
-              ? (["==", ["get", "offset"], 9999] as any)
-              : (["==", ["get", "offset"], off] as any);
+          const bandFilter = off === null ? (["==", ["get", "offset"], 9999] as any) : (["==", ["get", "offset"], off] as any);
 
           m.setFilter("utc-bands-highlight", bandFilter);
         };
 
-        // 🔹 handler usando o tipo correto do v3
-        const onMove = (e: mapboxgl.MapLayerMouseEvent) => {
+        const onMove = (e: mapboxgl.MapMouseEvent) => {
           const off = Number(e.features?.[0]?.properties?.offset);
           if (!Number.isFinite(off)) return;
 
@@ -344,20 +332,17 @@ export default function MapProvider({
           }
         };
 
-        const onLeave = (_e: mapboxgl.MapLayerMouseEvent) => {
+        const onLeave = (_e: mapboxgl.MapMouseEvent) => {
           currentHoverOffset = null;
           applyFocus(null);
           m.getCanvas().style.cursor = "";
         };
 
-        // registre/desregistre nos eventos da LAYER (não no mapa inteiro)
         m.on("mousemove", "utc-bands-fill", onMove);
         m.on("mouseleave", "utc-bands-fill", onLeave);
 
-        // tudo pronto
         m.once("idle", () => setReady(true));
 
-        // cleanup dos handlers/layers extras quando o estilo recarregar
         m.once("styledata", () => {
           m.off("mousemove", onMove);
           m.off("mouseleave", "utc-bands-fill", onLeave);
@@ -373,8 +358,6 @@ export default function MapProvider({
 
     return () => {
       if (map.current) {
-        // remova listeners do hover
-        // (se o estilo já foi trocado, eles podem ter sido desregistrados)
         try {
           map.current.off("mousemove", () => {});
           map.current.off("mouseleave", "utc-bands-fill", () => {});
@@ -399,7 +382,7 @@ export default function MapProvider({
 
   return (
     <div className="z-[1000]">
-      <MapContext.Provider value={{ map: map.current! }}>
+      <MapContext.Provider value={ { map: map.current! } }>
         {children}
       </MapContext.Provider>
 
