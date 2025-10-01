@@ -36,7 +36,7 @@ Follow the steps below to configure the dependencies to run the project on your 
 
 The map requires a GeoJSON file with **time zone polygons** to work. This file can be obtained from a compressed version (`timezones.json.zip`).
 
-You can download the updated timezone package from the [evansiroky/timezone-boundary-builder/releases](https://github.com/evansiroky/timezone-boundary-builder/releases) data repository or another trusted source. 
+You can download the updated timezone package [clicking here](https://github.com/evansiroky/timezone-boundary-builder/releases) or another trusted source. 
 
 #### Step 2: Placing file in project
 
