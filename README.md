@@ -2,6 +2,8 @@
 
 This project renders an **interactive map of time zones (UTC)** using [Mapbox GL JS](https://docs.mapbox.com/mapbox-gl-js) and **GeoJSON** data.
 
+![Application preview image](https://github.com/Marlinsk/timezone-map-with-next-mapbox-gl/blob/main/github/Screenshot%20from%202025-09-30%2023-06-08.png)
+
 The application displays:
 
 - Vertical time zone bands (UTC -12 to UTC +14) with soft colors.
